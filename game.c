@@ -26,7 +26,7 @@ typedef struct{
 
 void render(Stick *man,Stick *enemy, Bullet *bullets[],SDL_Renderer *gRend,SDL_Texture *back[],SDL_Texture *ground,SDL_Texture *bullet,int time);
 void events(Stick *man);
-void logic(Stick *man,Stick *enemy, Bullet *bullets[], int *walk, int *attack);
+void logic(Stick *man,Stick *enemy, Bullet *bullets[], int *walk, int *attack, int *death);
 void mapload(FILE *fptr);
 void addbullet(Bullet *bullets[],int x, int y, int dx);
 void removebullet(Bullet *bullets[],int i);
@@ -77,13 +77,13 @@ int main(){
 	BG[0] = SDL_CreateTextureFromSurface(renderer,bg[0]);
 	BG[1] = SDL_CreateTextureFromSurface(renderer,bg[1]);
 
-	int walkcount=0, attcount=0, deathcount;
+	int walkcount=0, attcount=0, deathcount = 0;
 	SDL_Event e;
 	while(e.key.keysym.sym != SDLK_ESCAPE){
 		render(&man,&enemy,bullets,renderer,BG,ground,bulltext,time);
 		SDL_Delay(10);
 		SDL_PollEvent(&e);
-		logic(&man,&enemy,bullets,&walkcount,&attcount);
+		logic(&man,&enemy,bullets,&walkcount,&attcount,&deathcount);
 		events(&man);
 	}
 
@@ -112,15 +112,15 @@ void render(Stick *man,Stick *enemy, Bullet *bullets[],SDL_Renderer *gRend,SDL_T
 		SDL_Rect rect = {74*man->frames,0,74,74};
 		SDL_Rect drect = {man->x,man->y,74,74};
 		
-		SDL_Rect erect = {0,0,74,74};
+		SDL_Rect erect = {74*enemy->frames,0,74,74};
 		SDL_Rect edrect = {enemy->x, enemy->y, 74, 74};
 
 		SDL_Rect grect = {376,94,434-376,190-94};
 		SDL_Rect dgrect = {0,220,434-376,190-94};
 		
 		SDL_RenderCopyEx(gRend,man->sheet,&rect,&drect,0,NULL,man->flipped);
-		if(enemy->visible == 1)
-			SDL_RenderCopyEx(gRend,enemy->sheet,&erect,&edrect,0,NULL,enemy->flipped);
+		
+		SDL_RenderCopyEx(gRend,enemy->sheet,&erect,&edrect,0,NULL,enemy->flipped);
 
 		SDL_RenderCopyEx(gRend,ground,&grect,&dgrect,0,NULL,0);
 	
@@ -181,7 +181,7 @@ void events(Stick *man){
 		man->walking = 0;
 }
 
-void logic(Stick* man,Stick* enemy, Bullet *bullets[], int *walk, int *attack){
+void logic(Stick* man,Stick* enemy, Bullet *bullets[], int *walk, int *attack,int *death){
 
 	if(man->walking == 1){
 			int wc = *walk;
@@ -218,8 +218,22 @@ void logic(Stick* man,Stick* enemy, Bullet *bullets[], int *walk, int *attack){
 		}
 		else
 			man->frames = 0;
-
-
+	
+	if(enemy->visible == 0){
+		int dc = *death;
+		dc++;
+		if(enemy-> frames <= 28){
+			enemy->frames = 29;
+		}
+		if(dc >= 4){
+			enemy->frames++;
+			dc = 0;
+		}
+		if(enemy->frames >= 36){
+			enemy->frames = 36;
+		}	
+		*death = dc;
+	}
 	if(man->grounded == 0){
 		man->dy += G;
 		if(man->dy > 7)
