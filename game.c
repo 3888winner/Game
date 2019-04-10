@@ -9,7 +9,7 @@
 
 typedef struct{
 
-	int x, y, dy;
+	int x, y, dy, health;
 	
 	int walking,flipped,visible,frames,grounded,attacking;
 
@@ -24,9 +24,9 @@ typedef struct{
 }Bullet;
 
 
-void render(Stick *man, Bullet *bullets[],SDL_Renderer *gRend,SDL_Texture *back[],SDL_Texture *ground,SDL_Texture *bullet,int time);
+void render(Stick *man,Stick *enemy, Bullet *bullets[],SDL_Renderer *gRend,SDL_Texture *back[],SDL_Texture *ground,SDL_Texture *bullet,int time);
 void events(Stick *man);
-void logic(Stick *man, Bullet *bullets[]);
+void logic(Stick *man,Stick *enemy, Bullet *bullets[], int *walk, int *attack);
 void mapload(FILE *fptr);
 void addbullet(Bullet *bullets[],int x, int y, int dx);
 void removebullet(Bullet *bullets[],int i);
@@ -39,11 +39,24 @@ int main(){
 	man.x = 30;
 	man.y = 80;
 	man.dy = 0;
+	man.health = 3;
 	man.walking = 0;
 	man.flipped = 1;
 	man.grounded = 0;
 	man.visible = 1;
 	man.attacking = 0;
+	
+	Stick enemy;
+	enemy.x = 40;
+	enemy.y = 170;
+	enemy.dy = 0;
+	enemy.health = 3;
+	enemy.walking = 0;
+	enemy.flipped = 0;
+	enemy.grounded = 0;
+	enemy.visible = 1;
+	enemy.attacking = 0;
+	enemy.frames = 0;
 
 	Bullet *bullets[BS] = {NULL};
 
@@ -56,6 +69,7 @@ int main(){
 	SDL_Surface *grnd = IMG_Load("ground.png");
 	
 	man.sheet = SDL_CreateTextureFromSurface(renderer,manrun);
+	enemy.sheet = man.sheet;
 
 	SDL_Texture *bulltext = SDL_CreateTextureFromSurface(renderer,bullsurf); 
 	SDL_Texture *ground = SDL_CreateTextureFromSurface(renderer,grnd);
@@ -63,46 +77,13 @@ int main(){
 	BG[0] = SDL_CreateTextureFromSurface(renderer,bg[0]);
 	BG[1] = SDL_CreateTextureFromSurface(renderer,bg[1]);
 
-
-	int walkcounter = 0, atcounter = 0;;		
+	int walkcount=0, attcount=0, deathcount;
 	SDL_Event e;
 	while(e.key.keysym.sym != SDLK_ESCAPE){
-		render(&man,bullets,renderer,BG,ground,bulltext,time);
+		render(&man,&enemy,bullets,renderer,BG,ground,bulltext,time);
 		SDL_Delay(10);
 		SDL_PollEvent(&e);
-		if(man.walking == 1){
-			walkcounter++;
-			if(walkcounter >= 4){
-				man.frames++;
-				walkcounter = 0;
-			}
-			if(man.frames >= 16){
-				man.frames = 1;
-			}	
-		}
-		else if(man.attacking == 1){
-			atcounter++;
-			if(man.frames <= 22)
-				man.frames = 23;
-			if(atcounter >= 4){
-				man.frames++;
-				atcounter = 0;
-			}			
-			if(man.frames >= 28){
-				man.attacking = 0;
-				man.frames = 0;
-			
-				if(man.flipped == 1){
-					addbullet(bullets,man.x+4,man.y+32,-5);
-				}
-				else
-					addbullet(bullets,man.x+54,man.y+32,5);
-			}
-		}
-		else
-			man.frames = 0;
-
-		logic(&man,bullets);
+		logic(&man,&enemy,bullets,&walkcount,&attcount);
 		events(&man);
 	}
 
@@ -110,7 +91,7 @@ int main(){
 }
 
 
-void render(Stick *man, Bullet *bullets[],SDL_Renderer *gRend,SDL_Texture *back[],SDL_Texture *ground,SDL_Texture *bulltext,int time){
+void render(Stick *man,Stick *enemy, Bullet *bullets[],SDL_Renderer *gRend,SDL_Texture *back[],SDL_Texture *ground,SDL_Texture *bulltext,int time){
 	if(time%10 == 0){
 //376,94   434,190
 //451,94   466,189
@@ -131,10 +112,16 @@ void render(Stick *man, Bullet *bullets[],SDL_Renderer *gRend,SDL_Texture *back[
 		SDL_Rect rect = {74*man->frames,0,74,74};
 		SDL_Rect drect = {man->x,man->y,74,74};
 		
+		SDL_Rect erect = {0,0,74,74};
+		SDL_Rect edrect = {enemy->x, enemy->y, 74, 74};
+
 		SDL_Rect grect = {376,94,434-376,190-94};
 		SDL_Rect dgrect = {0,220,434-376,190-94};
 		
 		SDL_RenderCopyEx(gRend,man->sheet,&rect,&drect,0,NULL,man->flipped);
+		if(enemy->visible == 1)
+			SDL_RenderCopyEx(gRend,enemy->sheet,&erect,&edrect,0,NULL,enemy->flipped);
+
 		SDL_RenderCopyEx(gRend,ground,&grect,&dgrect,0,NULL,0);
 	
 		SDL_Rect grect1 = {451,94,15,189-94};
@@ -194,8 +181,45 @@ void events(Stick *man){
 		man->walking = 0;
 }
 
-void logic(Stick* man, Bullet *bullets[]){
-	
+void logic(Stick* man,Stick* enemy, Bullet *bullets[], int *walk, int *attack){
+
+	if(man->walking == 1){
+			int wc = *walk;
+			wc++;
+			if(wc >= 4){
+				man->frames++;
+				wc = 0;
+			}
+			if(man->frames >= 16){
+				man->frames = 1;
+			}	
+			*walk = wc;
+		}
+		else if(man->attacking == 1){
+			int ac = *attack;
+			ac++;
+			if(man->frames <= 22)
+				man->frames = 23;
+			if(ac >= 4){
+				man->frames++;
+				ac = 0;
+			}			
+			if(man->frames >= 28){
+				man->attacking = 0;
+				man->frames = 0;
+			
+				if(man->flipped == 1){
+					addbullet(bullets,man->x+4,man->y+32,-5);
+				}
+				else
+					addbullet(bullets,man->x+54,man->y+32,5);
+			}
+			*attack = ac;
+		}
+		else
+			man->frames = 0;
+
+
 	if(man->grounded == 0){
 		man->dy += G;
 		if(man->dy > 7)
@@ -216,6 +240,13 @@ void logic(Stick* man, Bullet *bullets[]){
 			bullets[i]->x += bullets[i]->dx;
 			if(bullets[i]->x > 2000 || bullets[i]->x <-100){
 				removebullet(bullets,i);
+			}
+			if(bullets[i]->x > enemy->x+18 && bullets[i]->x < enemy->x+30 &&
+			   bullets[i]->y > enemy->y+30 && bullets[i]->y < enemy->y+34){
+				
+				enemy->health--;
+				removebullet(bullets,i);
+				if(enemy->health <= 0){enemy->visible = 0;}
 			}
 		}
 	}
