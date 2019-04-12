@@ -12,6 +12,7 @@ typedef struct{
 	int x, y, health;
 	float dy;
 	int walking,flipped,visible,frames,grounded,attacking,invincible;
+	int collision;
 
 	SDL_Texture* sheet;
 }Stick;
@@ -24,13 +25,28 @@ typedef struct{
 }Bullet;
 
 
-void render(Stick *man,Stick *enemy, Bullet *bullets[],SDL_Renderer *gRend,SDL_Texture *back[],SDL_Texture *ground,SDL_Texture *bullet,int *time);
+typedef struct{
+
+	int x,y;
+	
+	int w,h;
+
+	int collision;
+
+	SDL_Rect rect;
+	
+
+}Tile;
+
+void render(Stick *man,Stick *enemy, Bullet *bullets[],SDL_Renderer *gRend,SDL_Texture *back[],SDL_Texture *ground,SDL_Texture *bullet,SDL_Texture *map,int w, int h,Tile tiles[w][h],int *time);
 void events(Stick *man);
 void logic(Stick *man,Stick *enemy, Bullet *bullets[], int *walk, int *attack, int *death,int *time);
-void mapload(FILE *fptr);
+void  mapload(FILE *fptr, int w, int h, Tile tiles[w][h]);
 void addbullet(Bullet *bullets[],int x, int y, int dx);
 void removebullet(Bullet *bullets[],int i);
 void collide(Stick *man, Stick *enemy);
+void onground(Stick *man, int w, int h, Tile tiles[w][h]);
+void wall(Stick *man, int w, int h, Tile tiles[w][h]);
 
 int main(){
 
@@ -38,7 +54,7 @@ int main(){
 
 	Stick man;
 	man.x = 30;
-	man.y = 80;
+	man.y = 40;
 	man.dy = 0;
 	man.health = 3;
 	man.walking = 0;
@@ -47,6 +63,7 @@ int main(){
 	man.visible = 1;
 	man.attacking = 0;
 	man.invincible = 0;	
+	man.collision = 0;
 
 	Stick enemy;
 	enemy.x = 40;
@@ -60,9 +77,17 @@ int main(){
 	enemy.attacking = 0;
 	enemy.frames = 0;
 	enemy.invincible = 0;
+	enemy.collision = 0;
 
 	Bullet *bullets[BS] = {NULL};
-
+	int w,h;
+	FILE *fptr = fopen("map","r");
+	fscanf(fptr,"%d",&h);	
+	fscanf(fptr,"%d",&w);
+	Tile tiles[w][h];
+	mapload(fptr,w,h,tiles);
+	
+	printf("\n%d\n",(**tiles).w);
 	SDL_Window *window;
 	window = SDL_CreateWindow("SDL",0,0,S_W,S_H,SDL_WINDOW_SHOWN);
 	SDL_Renderer* renderer = SDL_CreateRenderer(window, -1 , SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC);
@@ -72,6 +97,9 @@ int main(){
 	SDL_Surface *bg[2] = {IMG_Load("clouds.png"), IMG_Load("far-grounds.png")}; 
 	SDL_Surface *grnd = IMG_Load("ground.png");
 	
+	SDL_Surface *mapsurf = IMG_Load("tileset.png");
+	SDL_Texture *map = SDL_CreateTextureFromSurface(renderer,mapsurf);
+
 	man.sheet = SDL_CreateTextureFromSurface(renderer,manrun);
 	enemy.sheet = SDL_CreateTextureFromSurface(renderer,enemrun);;
 
@@ -84,10 +112,16 @@ int main(){
 	int walkcount=0, attcount=0, deathcount = 0;
 	SDL_Event e;
 	while(e.key.keysym.sym != SDLK_ESCAPE){
-		render(&man,&enemy,bullets,renderer,BG,ground,bulltext,&time);
+		render(&man,&enemy,bullets,renderer,BG,ground,bulltext,map,w, h,tiles,&time);
 		SDL_Delay(10);
 		SDL_PollEvent(&e);
 		logic(&man,&enemy,bullets,&walkcount,&attcount,&deathcount,&time);
+		onground(&man,w,h,tiles);
+		wall(&man,w,h,tiles);
+	
+		onground(&enemy,w,h,tiles);
+		wall(&man,w,h,tiles);
+	
 		events(&man);
 	}
 
@@ -95,7 +129,7 @@ int main(){
 }
 
 
-void render(Stick *man,Stick *enemy, Bullet *bullets[],SDL_Renderer *gRend,SDL_Texture *back[],SDL_Texture *ground,SDL_Texture *bulltext,int *time){
+void render(Stick *man,Stick *enemy, Bullet *bullets[],SDL_Renderer *gRend,SDL_Texture *back[],SDL_Texture *ground,SDL_Texture *bulltext,SDL_Texture *map,int w,int h,Tile tiles[w][h],int *time){
 	if(*time%5 == 0){
 //376,94   434,190
 //451,94   466,189
@@ -103,7 +137,7 @@ void render(Stick *man,Stick *enemy, Bullet *bullets[],SDL_Renderer *gRend,SDL_T
 		SDL_SetRenderDrawColor(gRend, 0xCF,0xFF,0xCF,0xFF);
 		SDL_RenderClear(gRend);
 		
-		SDL_RenderSetLogicalSize(gRend,S_W,S_H);
+		SDL_RenderSetLogicalSize(gRend,S_W/3,S_H/3);
 	
 		SDL_Rect frect = {0,S_H/2,S_W,S_H/2};
 		SDL_Rect srect = {0,S_H*0.3,S_W,S_H};
@@ -121,18 +155,18 @@ void render(Stick *man,Stick *enemy, Bullet *bullets[],SDL_Renderer *gRend,SDL_T
 		SDL_Rect grect = {376,94,434-376,190-94};
 		SDL_Rect dgrect = {0,220,434-376,190-94};
 		
-		SDL_RenderSetLogicalSize(gRend, S_W/2.5,S_H/2.5);
+		/*SDL_RenderSetLogicalSize(gRend, S_W/2.5,S_H/2.5);*/
 		SDL_RenderCopyEx(gRend,man->sheet,&rect,&drect,0,NULL,man->flipped);
 		if(enemy->visible == 1)	
 			SDL_RenderCopyEx(gRend,enemy->sheet,&erect,&edrect,0,NULL,enemy->flipped);
 
-		SDL_RenderSetLogicalSize(gRend, S_W/2.5,S_H/2.5);
-		SDL_RenderCopyEx(gRend,ground,&grect,&dgrect,0,NULL,0);
+		/*SDL_RenderSetLogicalSize(gRend, S_W/2.5,S_H/2.5);*/
+	/*	SDL_RenderCopyEx(gRend,ground,&grect,&dgrect,0,NULL,0);
 	
 		SDL_Rect grect1 = {451,94,15,189-94};
 		SDL_Rect dgrect1 = {434-376,220,15,189-94};
 		SDL_RenderCopyEx(gRend,ground,&grect1,&dgrect1,0,NULL,0);
-		
+	
 		int i;
 		for(i = 0; i<28;i++){
 
@@ -143,12 +177,24 @@ void render(Stick *man,Stick *enemy, Bullet *bullets[],SDL_Renderer *gRend,SDL_T
 		SDL_Rect grect2 = {483,95,541-483,190-95};
 		SDL_Rect dgrect2 = {14*i+434-376,220,541-483,190-95};
 		SDL_RenderCopyEx(gRend,ground,&grect2,&dgrect2,0,NULL,0);
-
-		for(i = 0; i <BS; i++){
+		*/
+		for(int i = 0; i <BS; i++){
 
 			if(bullets[i]){
 				SDL_Rect brect = {bullets[i]->x,bullets[i]->y,16,16};
 				SDL_RenderCopy(gRend,bulltext,NULL,&brect);
+			}
+		}
+		
+		for(int i = 0; i < w; i ++){
+			for(int j = 0; j  < h; j ++){
+			
+				SDL_Rect rect = {j*16,7*h+i*16,16,16};
+				tiles[i][j].x = j*16;
+				tiles[i][j].y = i*16+7*h;
+
+				SDL_RenderCopyEx(gRend,map,&tiles[i][j].rect,&rect,0,NULL,0);
+			
 			}
 		}
 
@@ -166,7 +212,7 @@ void events(Stick *man){
 		
 		man->dy = -5;
 		man->y += man->dy;
-		man->grounded = 0;;
+		man->grounded = 0;
 		
 	}
 	else if(states[SDL_SCANCODE_SPACE] && man->attacking == 0){
@@ -252,17 +298,24 @@ void logic(Stick* man,Stick* enemy, Bullet *bullets[], int *walk, int *attack,in
 	else
 		enemy->frames = 0;
 
-
+	
 	if(man->grounded == 0){
 		man->dy += G;
 		if(man->dy > 7)
 	       		man->dy = 7;	
 	}
 
+	if(enemy->grounded == 0){
+		enemy->dy += G;
+		if(enemy->dy > 7)
+	       		enemy->dy = 7;	
+	}
+
 	man->y += man->dy;
+	enemy->y += enemy->dy;
 	
-	if(man->y > 170){
-		man->y = 170;
+	if(man->y > S_H){
+		man->y = 0;
 		man->dy = 0;
 		man->grounded = 1;
 	}
@@ -287,12 +340,6 @@ void logic(Stick* man,Stick* enemy, Bullet *bullets[], int *walk, int *attack,in
 
 	if(enemy->walking == 1){
 	
-		if(enemy->x >= 450){
-			enemy->flipped = 1;
-		}
-		else if (enemy->x <= -50){
-			enemy->flipped = 0;
-		}
 		
 		if(enemy->flipped == 1){
 			enemy->x -= 1;
@@ -307,21 +354,36 @@ void logic(Stick* man,Stick* enemy, Bullet *bullets[], int *walk, int *attack,in
 }
 
 
-void mapload(FILE *fptr){
 
-	fptr = fopen("map.txt","r");
+void mapload(FILE *fptr,int w, int h, Tile tiles[w][h]){
+
 	
-	if(fptr == NULL){
-		printf("File Not Found");
-		exit(1);
-	}
-	int data[10],i=0;
-	while(!feof(fptr)){
-		fscanf(fptr,"%d",&data[i]);
-		i++;
-	}
+	int t;
 	
 
+	printf("%d    %d\n",w,h);
+	
+
+	
+	for(int i = 0; i < w; i++){
+		for(int j = 0; j < h; j++){
+			
+			fscanf(fptr,"%d",&t);
+			tiles[i][j].rect.x = 55 + t*16;
+			tiles[i][j].rect.y = 41;
+			tiles[i][j].rect.w = 15;
+			tiles[i][j].rect.h = 15;
+			
+			if(t == 0)
+				tiles[i][j].collision = 0;
+			else
+				tiles[i][j].collision = 1;
+			printf("%d\t\t",t);
+			
+		}
+	printf("\n");
+	}
+	
 }
 
 void addbullet(Bullet *bullets[],int x, int y, int dx){
@@ -364,5 +426,44 @@ void collide(Stick *man, Stick *enemy){
 		if(man->health <= 0){man->visible = 0;}
 
 		man->invincible = 1;
+	}
+}
+
+
+void onground(Stick *man, int w, int h, Tile tiles[w][h]){
+
+	for(int i =0; i<w;i++){
+		for(int j = 0; j<h;j++){
+			printf("%d     %d\n",man->x,tiles[i][j].x);
+			if(man->y+50 > tiles[i][j].y && man->y < tiles[i][j].y+15 &&  tiles[i][j].collision == 1 && man->x+23 < tiles[i][j].x+15 && man->x+40 > tiles[i][j].x){ 
+				man->grounded = 1;
+				man->y-=7;// tiles[i][j].y-75;
+				printf("broke!");
+				return;
+			}
+		}
+
+			
+	}
+	man->grounded = 0;
+}
+
+void wall(Stick *man, int w, int h, Tile tiles[w][h]){
+
+	for(int i =0; i<w;i++){
+		for(int j = 0; j<h;j++){
+			printf("%d     %d\n",man->x,tiles[i][j].x);
+			if(man->y+50 > tiles[i][j].y && man->y < tiles[i][j].y+20 &&  tiles[i][j].collision == 1 && man->x+23 < tiles[i][j].x+15 && man->x+40 > tiles[i][j].x){ 
+				if(man->flipped == 1)
+					man->x += 3;
+				else
+					man->x -= 3;
+				// tiles[i][j].y-75;
+				printf("broke!");
+				return;
+			}
+		}
+
+			
 	}
 }

@@ -74,6 +74,8 @@ int main(){
 	printf("\n");
 	}
 	
+	Tile **tile = tiles[w][h];
+
 	SDL_Event e;
 	SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY,0);
 	while(e.key.keysym.sym != SDLK_ESCAPE){
@@ -84,7 +86,7 @@ int main(){
 			for(int j = 0; j < h; j ++){
 			
 				SDL_Rect rect = {j*16-cam.x,i*16-cam.y,16,16};
-				SDL_RenderCopyEx(renderer,map,&tiles[i][j].rect,&rect,0,NULL,0);
+				SDL_RenderCopyEx(renderer,map,&tile[i][j].rect,&rect,0,NULL,0);
 			
 			}
 		}
@@ -112,3 +114,4 @@ int main(){
 
 
 }
+
