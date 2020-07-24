@@ -1,2 +1,2 @@
 # Game
-Gotta make this game fo uni
+Custom game written from scratch using C and SDL2.
